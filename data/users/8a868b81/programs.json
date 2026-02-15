@@ -1,0 +1,223 @@
+[
+  {
+    "id": "endurance",
+    "name": "Endurance Builder",
+    "description": "Build aerobic base with steady swimming",
+    "sections": [
+      {
+        "name": "Warm-up",
+        "sets": [
+          {
+            "repeats": 1,
+            "duration": 300,
+            "pace": 180,
+            "rest": 0,
+            "description": "Easy pace"
+          }
+        ]
+      },
+      {
+        "name": "Main Set",
+        "sets": [
+          {
+            "repeats": 4,
+            "duration": 180,
+            "pace": 130,
+            "rest": 60,
+            "description": "Moderate effort"
+          }
+        ]
+      },
+      {
+        "name": "Cool-down",
+        "sets": [
+          {
+            "repeats": 1,
+            "duration": 300,
+            "pace": 180,
+            "rest": 0,
+            "description": "Easy pace"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "intervals",
+    "name": "Interval Training",
+    "description": "Alternating fast and moderate intervals",
+    "sections": [
+      {
+        "name": "Warm-up",
+        "sets": [
+          {
+            "repeats": 1,
+            "duration": 300,
+            "pace": 180,
+            "rest": 0,
+            "description": "Easy pace"
+          }
+        ]
+      },
+      {
+        "name": "Main Set",
+        "sets": [
+          {
+            "repeats": 8,
+            "duration": 60,
+            "pace": 90,
+            "rest": 30,
+            "description": "Fast"
+          },
+          {
+            "repeats": 4,
+            "duration": 120,
+            "pace": 130,
+            "rest": 45,
+            "description": "Moderate"
+          }
+        ]
+      },
+      {
+        "name": "Cool-down",
+        "sets": [
+          {
+            "repeats": 1,
+            "duration": 300,
+            "pace": 180,
+            "rest": 0,
+            "description": "Easy pace"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "pyramid",
+    "name": "Pyramid Workout",
+    "description": "Ascending then descending interval durations",
+    "sections": [
+      {
+        "name": "Warm-up",
+        "sets": [
+          {
+            "repeats": 1,
+            "duration": 300,
+            "pace": 180,
+            "rest": 0,
+            "description": "Easy pace"
+          }
+        ]
+      },
+      {
+        "name": "Main Set",
+        "sets": [
+          {
+            "repeats": 1,
+            "duration": 60,
+            "pace": 120,
+            "rest": 30,
+            "description": "1 min"
+          },
+          {
+            "repeats": 1,
+            "duration": 120,
+            "pace": 110,
+            "rest": 30,
+            "description": "2 min"
+          },
+          {
+            "repeats": 1,
+            "duration": 180,
+            "pace": 100,
+            "rest": 30,
+            "description": "3 min"
+          },
+          {
+            "repeats": 1,
+            "duration": 240,
+            "pace": 95,
+            "rest": 60,
+            "description": "4 min (peak)"
+          },
+          {
+            "repeats": 1,
+            "duration": 180,
+            "pace": 100,
+            "rest": 30,
+            "description": "3 min"
+          },
+          {
+            "repeats": 1,
+            "duration": 120,
+            "pace": 110,
+            "rest": 30,
+            "description": "2 min"
+          },
+          {
+            "repeats": 1,
+            "duration": 60,
+            "pace": 120,
+            "rest": 0,
+            "description": "1 min"
+          }
+        ]
+      },
+      {
+        "name": "Cool-down",
+        "sets": [
+          {
+            "repeats": 1,
+            "duration": 300,
+            "pace": 180,
+            "rest": 0,
+            "description": "Easy pace"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "tempo",
+    "name": "Tempo Swim",
+    "description": "Sustained threshold pace effort",
+    "sections": [
+      {
+        "name": "Warm-up",
+        "sets": [
+          {
+            "repeats": 1,
+            "duration": 300,
+            "pace": 180,
+            "rest": 0,
+            "description": "Easy pace"
+          }
+        ]
+      },
+      {
+        "name": "Main Set",
+        "sets": [
+          {
+            "repeats": 1,
+            "duration": 1200,
+            "pace": 110,
+            "rest": 0,
+            "description": "Steady threshold"
+          }
+        ]
+      },
+      {
+        "name": "Cool-down",
+        "sets": [
+          {
+            "repeats": 1,
+            "duration": 300,
+            "pace": 180,
+            "rest": 0,
+            "description": "Easy pace"
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.deps/
+data/users/*/strava.json
+data/users/*/settings.json
+.env
+*.pcap

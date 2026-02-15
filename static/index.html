@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Endless Pool</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- ===== LOGIN SCREEN ===== -->
+    <div id="login-screen" class="screen active">
+        <div class="login-container">
+            <h1>Endless Pool</h1>
+            <p class="subtitle">Select your profile</p>
+            <div id="user-grid" class="user-grid"></div>
+            <button id="add-user-btn" class="btn btn-outline" onclick="showCreateUser()">+ Add User</button>
+        </div>
+
+        <!-- PIN Entry -->
+        <div id="pin-overlay" class="overlay hidden">
+            <div class="overlay-content pin-entry">
+                <h2 id="pin-user-name"></h2>
+                <div class="pin-dots">
+                    <span class="dot"></span><span class="dot"></span>
+                    <span class="dot"></span><span class="dot"></span>
+                </div>
+                <div id="pin-error" class="error hidden">Wrong PIN</div>
+                <div class="pin-pad">
+                    <button onclick="pinInput('1')">1</button>
+                    <button onclick="pinInput('2')">2</button>
+                    <button onclick="pinInput('3')">3</button>
+                    <button onclick="pinInput('4')">4</button>
+                    <button onclick="pinInput('5')">5</button>
+                    <button onclick="pinInput('6')">6</button>
+                    <button onclick="pinInput('7')">7</button>
+                    <button onclick="pinInput('8')">8</button>
+                    <button onclick="pinInput('9')">9</button>
+                    <button class="pin-empty"></button>
+                    <button onclick="pinInput('0')">0</button>
+                    <button onclick="pinDelete()">&larr;</button>
+                </div>
+                <button class="btn btn-text" onclick="closePinOverlay()">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Create User -->
+        <div id="create-overlay" class="overlay hidden">
+            <div class="overlay-content">
+                <h2>New User</h2>
+                <input id="new-user-name" type="text" placeholder="Name" maxlength="20" autocomplete="off">
+                <label>Set a 4-digit PIN:</label>
+                <input id="new-user-pin" type="password" inputmode="numeric" maxlength="4" placeholder="****" autocomplete="off">
+                <div id="create-error" class="error hidden"></div>
+                <div class="btn-row">
+                    <button class="btn btn-text" onclick="closeCreateOverlay()">Cancel</button>
+                    <button class="btn btn-primary" onclick="createUser()">Create</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== MAIN APP ===== -->
+    <div id="app-screen" class="screen">
+        <!-- Header -->
+        <header class="app-header">
+            <span id="header-greeting">Endless Pool</span>
+            <button class="btn btn-text btn-sm" onclick="logout()">Logout</button>
+        </header>
+
+        <!-- Tab bar -->
+        <nav class="tab-bar">
+            <button class="tab active" data-tab="control" onclick="switchTab('control')">Control</button>
+            <button class="tab" data-tab="programs" onclick="switchTab('programs')">Programs</button>
+            <button class="tab" data-tab="workouts" onclick="switchTab('workouts')">Workouts</button>
+            <button class="tab" data-tab="settings" onclick="switchTab('settings')">Settings</button>
+        </nav>
+
+        <!-- ===== CONTROL TAB ===== -->
+        <div id="tab-control" class="tab-content active">
+            <div class="status-bar">
+                <div class="status-indicator" id="status-indicator">
+                    <span class="status-dot"></span>
+                    <span id="status-text">Connecting...</span>
+                </div>
+                <div id="recording-badge" class="badge hidden">REC</div>
+            </div>
+
+            <div class="control-panel">
+                <!-- Timer -->
+                <div class="control-group">
+                    <label>Timer</label>
+                    <div class="timer-display">
+                        <span id="timer-remaining" class="big-number">--:--</span>
+                        <span class="timer-sep">/</span>
+                        <span id="timer-set" class="small-number">--:--</span>
+                    </div>
+                    <div class="timer-controls">
+                        <button class="btn btn-sm" onclick="adjustTimer(-60)">-1m</button>
+                        <button class="btn btn-sm" onclick="adjustTimer(-300)">-5m</button>
+                        <input id="timer-input" type="number" min="0" max="5400" value="1800" step="60">
+                        <button class="btn btn-sm" onclick="adjustTimer(300)">+5m</button>
+                        <button class="btn btn-sm" onclick="adjustTimer(60)">+1m</button>
+                        <button class="btn btn-primary btn-sm" onclick="sendTimer()">Set</button>
+                    </div>
+                </div>
+
+                <!-- Speed / Pace -->
+                <div class="control-group">
+                    <label>Pace <span id="pace-display" class="pace-value">--:--/100m</span></label>
+                    <input id="speed-slider" type="range" min="74" max="243" value="120"
+                           oninput="updatePaceDisplay(this.value)">
+                    <div class="range-labels">
+                        <span>1:14</span><span>Fast</span><span>Slow</span><span>4:03</span>
+                    </div>
+                    <button class="btn btn-primary" onclick="sendSpeed()">Set Pace</button>
+                </div>
+
+                <!-- Distance -->
+                <div class="control-group stats-row">
+                    <div class="stat">
+                        <span class="stat-label">Segment</span>
+                        <span id="stat-segment" class="stat-value">0.0 m</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Total</span>
+                        <span id="stat-total" class="stat-value">0.0 m</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Current Pace</span>
+                        <span id="stat-pace" class="stat-value">--:--</span>
+                    </div>
+                </div>
+
+                <!-- Start/Stop -->
+                <button id="start-stop-btn" class="btn btn-start" onclick="toggleStartStop()">
+                    START
+                </button>
+
+                <!-- Raw Protocol Values (debug) -->
+                <details class="debug-panel">
+                    <summary>Raw Protocol Values</summary>
+                    <div class="debug-grid">
+                        <span class="debug-label">speed_param (B7)</span>
+                        <span id="dbg-speed-param" class="debug-value">-</span>
+                        <span class="debug-label">current_speed (B5)</span>
+                        <span id="dbg-current-speed" class="debug-value">-</span>
+                        <span class="debug-label">target_speed (B6)</span>
+                        <span id="dbg-target-speed" class="debug-value">-</span>
+                        <span class="debug-label">status_flags (B3)</span>
+                        <span id="dbg-status-flags" class="debug-value">-</span>
+                        <span class="debug-label">running_flag (B4)</span>
+                        <span id="dbg-running-flag" class="debug-value">-</span>
+                        <span class="debug-label">state_id (B2)</span>
+                        <span id="dbg-state-id" class="debug-value">-</span>
+                        <span class="debug-label">pool_state</span>
+                        <span id="dbg-pool-state" class="debug-value">-</span>
+                        <span class="debug-label">commanded_pace</span>
+                        <span id="dbg-commanded-pace" class="debug-value">-</span>
+                        <span class="debug-label">current_pace (level)</span>
+                        <span id="dbg-current-pace" class="debug-value">-</span>
+                        <span class="debug-label">target_pace (level)</span>
+                        <span id="dbg-target-pace" class="debug-value">-</span>
+                    </div>
+                </details>
+            </div>
+        </div>
+
+        <!-- ===== PROGRAMS TAB ===== -->
+        <div id="tab-programs" class="tab-content">
+            <div class="programs-header">
+                <h2>Training Programs</h2>
+                <button class="btn btn-primary btn-sm" onclick="showProgramEditor()">+ New</button>
+            </div>
+            <div id="programs-list" class="programs-list"></div>
+
+            <!-- Program runner overlay -->
+            <div id="runner-overlay" class="overlay hidden">
+                <div class="overlay-content runner-content">
+                    <h2 id="runner-program-name"></h2>
+                    <div id="runner-progress" class="runner-progress"></div>
+                    <div class="runner-current">
+                        <div id="runner-section" class="runner-section"></div>
+                        <div id="runner-interval" class="runner-interval"></div>
+                        <div id="runner-countdown" class="big-number">--:--</div>
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn btn-danger" onclick="stopProgram()">Stop Program</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Program editor overlay -->
+            <div id="editor-overlay" class="overlay hidden">
+                <div class="overlay-content editor-content">
+                    <h2 id="editor-title">New Program</h2>
+                    <input id="prog-name" type="text" placeholder="Program name" autocomplete="off">
+                    <input id="prog-desc" type="text" placeholder="Description" autocomplete="off">
+
+                    <div id="editor-sections"></div>
+
+                    <button class="btn btn-outline btn-sm" onclick="addEditorSection()">+ Add Section</button>
+
+                    <div class="btn-row">
+                        <button class="btn btn-text" onclick="closeEditor()">Cancel</button>
+                        <button class="btn btn-primary" onclick="saveProgram()">Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== WORKOUTS TAB ===== -->
+        <div id="tab-workouts" class="tab-content">
+            <h2>Workout History</h2>
+            <div id="workouts-list" class="workouts-list"></div>
+        </div>
+
+        <!-- ===== SETTINGS TAB ===== -->
+        <div id="tab-settings" class="tab-content">
+            <h2>Settings</h2>
+            <div class="settings-group">
+                <h3>Strava Integration</h3>
+                <p id="strava-status">Not connected</p>
+                <div class="form-group">
+                    <label>Client ID</label>
+                    <input id="strava-client-id" type="text" placeholder="Your Strava Client ID" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label>Client Secret</label>
+                    <input id="strava-client-secret" type="password" placeholder="Your Strava Client Secret" autocomplete="off">
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-primary btn-sm" onclick="saveStravaSettings()">Save Credentials</button>
+                    <button class="btn btn-outline btn-sm" onclick="connectStrava()">Connect to Strava</button>
+                </div>
+                <p class="help-text">
+                    Create a free Strava API app at
+                    <a href="https://www.strava.com/settings/api" target="_blank">strava.com/settings/api</a>.
+                    Set the callback domain to <code>localhost</code>.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
