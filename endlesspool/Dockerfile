@@ -5,6 +5,9 @@ RUN apk add --no-cache python3 py3-pip git jq
 
 WORKDIR /app
 
+# BUILD_VERSION is set by HA Supervisor from config.yaml's version field.
+# Placing it before git clone ensures Docker busts the cache when version bumps.
+ARG BUILD_VERSION
 RUN git clone --depth 1 https://github.com/smash0190/endlesspool.git /tmp/src \
     && cp /tmp/src/server.py /tmp/src/strava.py /tmp/src/tcx.py /tmp/src/cli.py . \
     && cp /tmp/src/requirements.txt . \
