@@ -5,8 +5,10 @@ The pool broadcasts UDP status packets every ~500ms and accepts UDP command pack
 Both packet types share a common 0x0AF0 magic header and use CRC32 checksums.
 """
 
+import os
+
 # Network
-POOL_IP = "192.168.50.232"
+POOL_IP = os.environ.get("ENDLESSPOOL_POOL_IP", "192.168.50.232")
 BROADCAST_IP = "255.255.255.255"
 POOL_PORT = 9750        # Pool listens on this port
 CLIENT_PORT = 45654     # Client sends from / listens on this port

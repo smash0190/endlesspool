@@ -1,0 +1,22 @@
+name: "Endless Pool Controller"
+version: "1.0.0"
+slug: "endlesspool"
+description: "Web-based controller for FS FORTH-SYSTEME endless pools with training programs, workout tracking, and Strava upload"
+url: "https://github.com/smash0190/endlesspool"
+arch:
+  - aarch64
+  - armv7
+startup: application
+boot: auto
+host_network: true
+ports:
+  8000/tcp: 8000
+ports_description:
+  8000/tcp: "Web UI"
+map:
+  - type: data
+    read_only: false
+options:
+  pool_ip: "192.168.50.232"
+schema:
+  pool_ip: str

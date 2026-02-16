@@ -14,6 +14,7 @@ Handles:
 import asyncio
 import hashlib
 import json
+import os
 import socket
 import threading
 import time
@@ -43,7 +44,7 @@ import tcx as tcx_module
 # ---------------------------------------------------------------------------
 # Data paths
 # ---------------------------------------------------------------------------
-DATA_DIR = Path("data")
+DATA_DIR = Path(os.environ.get("ENDLESSPOOL_DATA_DIR", "data"))
 USERS_FILE = DATA_DIR / "users.json"
 
 def user_dir(user_id: str) -> Path:

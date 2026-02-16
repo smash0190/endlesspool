@@ -9,6 +9,7 @@ Flow:
 """
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -22,7 +23,7 @@ STRAVA_UPLOAD_STATUS_URL = "https://www.strava.com/api/v3/uploads/{upload_id}"
 
 
 def get_user_data_dir(user_id: str) -> Path:
-    return Path("data/users") / user_id
+    return Path(os.environ.get("ENDLESSPOOL_DATA_DIR", "data")) / "users" / user_id
 
 
 def load_strava_tokens(user_id: str) -> Optional[Dict[str, Any]]:
