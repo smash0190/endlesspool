@@ -1,1 +1,21 @@
-[]
+[
+  {
+    "id": "9736cd61-252b-4647-b81f-b739e9a980d4",
+    "user_id": "8a868b81",
+    "start_time": "2026-02-16T01:39:17.454256+00:00",
+    "total_distance": 4.5,
+    "total_time": 8,
+    "intervals": [
+      {
+        "start_time": "2026-02-16T01:39:17.454256+00:00",
+        "duration": 8,
+        "distance": 4.5,
+        "speed_param": 177,
+        "avg_pace": 177.0,
+        "calories": 1,
+        "type": "swim"
+      }
+    ],
+    "total_calories": 1
+  }
+]

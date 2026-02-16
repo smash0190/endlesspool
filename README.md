@@ -11,6 +11,16 @@ A mobile-friendly web app to control an endless pool (FS FORTH-SYSTEME controlle
 - **Export**: Download workouts as TCX files (Garmin Connect, TrainingPeaks compatible)
 - **Strava upload**: Direct upload via OAuth2
 
+## Screenshots
+
+| Control | Programs |
+|---------|----------|
+| ![Control](screenshots/control.png) | ![Programs](screenshots/programs.png) |
+
+| Workouts | Settings |
+|----------|----------|
+| ![Workouts](screenshots/workouts.png) | ![Settings](screenshots/settings.png) |
+
 ## Quick Start
 
 ```bash
