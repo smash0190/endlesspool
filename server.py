@@ -65,55 +65,120 @@ udp_sender_sock: Optional[socket.socket] = None
 workout_recorder = None  # WorkoutRecorder instance
 
 # ---------------------------------------------------------------------------
+# Calorie estimation
+# ---------------------------------------------------------------------------
+# MET values for pool swimming by pace (seconds per 100m).
+# Source: Compendium of Physical Activities (Ainsworth 2011).
+# Endless-pool swimming is similar to "swimming laps, moderate/vigorous effort".
+_CAL_MET_TABLE = [
+    # (pace_sec_per_100m, MET)
+    (74,  10.0),  # very fast (~1:14) — vigorous
+    (100,  8.5),  # fast
+    (130,  7.0),  # moderate-fast
+    (160,  5.8),  # moderate
+    (200,  4.5),  # easy
+    (243,  3.5),  # very easy (~4:03)
+]
+
+def estimate_calories(duration_sec: int, pace_sec: int, weight_kg: float = 75.0) -> int:
+    """Estimate kcal burned for a swim interval.
+
+    Uses piecewise-linear MET interpolation by pace.
+    Default weight 75 kg if the user hasn't set one.
+    """
+    if duration_sec <= 0:
+        return 0
+    met = _CAL_MET_TABLE[-1][1]  # default to slowest
+    tbl = _CAL_MET_TABLE
+    if pace_sec <= tbl[0][0]:
+        met = tbl[0][1]
+    elif pace_sec >= tbl[-1][0]:
+        met = tbl[-1][1]
+    else:
+        for i in range(len(tbl) - 1):
+            p1, m1 = tbl[i]
+            p2, m2 = tbl[i + 1]
+            if p1 <= pace_sec <= p2:
+                t = (pace_sec - p1) / (p2 - p1)
+                met = m1 + t * (m2 - m1)
+                break
+    # kcal = MET × weight_kg × duration_hours
+    return int(round(met * weight_kg * (duration_sec / 3600.0)))
+
+
+# ---------------------------------------------------------------------------
 # Workout recorder
 # ---------------------------------------------------------------------------
 class WorkoutRecorder:
-    """Automatically records workouts when the pool is running."""
+    """Automatically records workouts when the pool is running.
+
+    Thread-safety: all public methods acquire ``_lock`` because
+    ``update()`` is called from the UDP-listener thread while
+    ``finalize()`` can be called from WebSocket command threads.
+    """
 
     def __init__(self):
+        self._lock = threading.Lock()
         self.active_user_id: Optional[str] = None
         self.recording = False
         self.workout: Optional[Dict] = None
         self.current_interval_start: Optional[float] = None
         self.current_interval_dist_start: float = 0.0
         self.last_speed_param: int = 0
-        self.was_running: bool = False
+        # Use pool_state (derived from status_flags + running_flag) instead
+        # of raw is_running so that transient speed-change pauses don't
+        # falsely trigger stop/start.
+        self.last_pool_state: str = "idle"
         self.stopped_at: Optional[float] = None
 
     def set_user(self, user_id: str):
-        self.active_user_id = user_id
+        with self._lock:
+            self.active_user_id = user_id
 
     def update(self, status: PoolStatus):
         """Called on each broadcast packet. Manages recording state."""
         now = time.time()
+        state = status._derive_state()
 
-        if status.is_running and not self.was_running:
-            self._on_start(status, now)
-            self.stopped_at = None
-        elif not status.is_running and self.was_running:
-            self._on_stop(status, now)
-            self.stopped_at = now
-        elif status.is_running and self.recording:
-            self.stopped_at = None
-            # Check for speed change mid-swim
-            if status.speed_param != self.last_speed_param and self.last_speed_param != 0:
-                self._finish_interval(status, now)
-                self._start_interval(status, now)
+        with self._lock:
+            prev = self.last_pool_state
+            self.last_pool_state = state
 
-        self.was_running = status.is_running
+            # Determine logical running: pool is truly active when state
+            # is running OR briefly transitioning during a speed change.
+            truly_running = state in ("running", "changing", "starting")
+            was_truly_running = prev in ("running", "changing", "starting")
+
+            if truly_running and not was_truly_running:
+                self._on_start(status, now)
+                self.stopped_at = None
+            elif not truly_running and was_truly_running:
+                self._on_stop(status, now)
+                self.stopped_at = now
+            elif truly_running and self.recording:
+                self.stopped_at = None
+                # Speed change mid-swim → new interval
+                if (status.speed_param != self.last_speed_param
+                        and self.last_speed_param != 0):
+                    self._finish_interval(status, now)
+                    self._start_interval(status, now)
 
     def check_auto_finalize(self) -> Optional[Dict]:
-        """Auto-finalize if pool has been stopped for 5+ seconds while recording.
+        """Auto-finalize when pool has truly stopped while recording.
 
-        Speed changes briefly stop the pool (~2s) so we use a 5s threshold
-        to distinguish real stops (timer expiry, manual stop from other app)
-        from transient speed-change pauses.
+        - Immediate finalize when pool reaches "idle" state (timer expired,
+          user stopped via other app).
+        - 5-second safety net for any other non-running state.
         """
-        if not self.recording or self.stopped_at is None:
+        with self._lock:
+            if not self.recording or self.stopped_at is None:
+                return None
+            elapsed = time.time() - self.stopped_at
+            if self.last_pool_state == "idle" and elapsed > 1.0:
+                return self._finalize_locked()
+            if elapsed > 5.0:
+                return self._finalize_locked()
             return None
-        if time.time() - self.stopped_at > 5.0:
-            return self.finalize()
-        return None
 
     def _on_start(self, status: PoolStatus, now: float):
         if not self.active_user_id:
@@ -122,7 +187,9 @@ class WorkoutRecorder:
             self.workout = {
                 "id": str(uuid.uuid4()),
                 "user_id": self.active_user_id,
-                "start_time": datetime.fromtimestamp(now, tz=timezone.utc).isoformat(),
+                "start_time": datetime.fromtimestamp(
+                    now, tz=timezone.utc
+                ).isoformat(),
                 "total_distance": 0.0,
                 "total_time": 0,
                 "intervals": [],
@@ -144,9 +211,16 @@ class WorkoutRecorder:
             return
 
         duration = int(now - self.current_interval_start)
-        distance = max(0, status.total_distance - self.current_interval_dist_start)
+        distance = max(
+            0, status.total_distance - self.current_interval_dist_start
+        )
 
         if duration > 0:
+            weight = 75.0
+            if self.active_user_id:
+                us = strava_module.load_user_settings(self.active_user_id)
+                weight = us.get("weight_kg", 75.0)
+            cals = estimate_calories(duration, self.last_speed_param, weight)
             interval = {
                 "start_time": datetime.fromtimestamp(
                     self.current_interval_start, tz=timezone.utc
@@ -154,7 +228,11 @@ class WorkoutRecorder:
                 "duration": duration,
                 "distance": round(distance, 1),
                 "speed_param": self.last_speed_param,
-                "avg_pace": round(100 / (distance / duration), 1) if distance > 0 else 0,
+                "avg_pace": (
+                    round(100 / (distance / duration), 1)
+                    if distance > 0 else 0
+                ),
+                "calories": cals,
                 "type": "swim",
             }
             self.workout["intervals"].append(interval)
@@ -167,6 +245,11 @@ class WorkoutRecorder:
 
     def finalize(self) -> Optional[Dict]:
         """Finish recording and return the workout, or None."""
+        with self._lock:
+            return self._finalize_locked()
+
+    def _finalize_locked(self) -> Optional[Dict]:
+        """Inner finalize — caller must hold ``_lock``."""
         if not self.recording or not self.workout:
             return None
         if not self.workout["intervals"]:
@@ -175,9 +258,13 @@ class WorkoutRecorder:
             return None
 
         workout = self.workout
+        workout["total_calories"] = sum(
+            iv.get("calories", 0) for iv in workout["intervals"]
+        )
         self.recording = False
         self.workout = None
         self.current_interval_start = None
+        self.stopped_at = None
         return workout
 
     def is_recording(self) -> bool:
@@ -292,6 +379,17 @@ def _send_timer_verified(seconds: int):
                    lambda s: s.get("set_timer") == seconds)
 
 
+def _send_program_step(pace: int, duration: int):
+    """Set speed, timer, then start — sequenced with verification.
+
+    Used by the program runner to guarantee commands are applied
+    in order before the pool starts.
+    """
+    _send_speed_verified(pace)
+    _send_timer_verified(duration)
+    _send_start_verified()
+
+
 # ---------------------------------------------------------------------------
 # App lifecycle
 # ---------------------------------------------------------------------------
@@ -392,6 +490,14 @@ async def _ws_receive_commands(ws: WebSocket):
                 threading.Thread(
                     target=_send_timer_verified,
                     args=(int(value),),
+                    daemon=True,
+                ).start()
+            elif cmd == "program_step":
+                pace = int(msg.get("pace", 120))
+                duration = int(msg.get("duration", 300))
+                threading.Thread(
+                    target=_send_program_step,
+                    args=(pace, duration),
                     daemon=True,
                 ).start()
         elif msg_type == "set_user":
@@ -500,7 +606,17 @@ async def get_programs(user_id: str):
     if not path.exists():
         return []
     with open(path) as f:
-        return json.load(f)
+        programs = json.load(f)
+    # Backfill any programs with missing/empty IDs
+    changed = False
+    for p in programs:
+        if not p.get("id"):
+            p["id"] = str(uuid.uuid4())[:8]
+            changed = True
+    if changed:
+        with open(path, "w") as f:
+            json.dump(programs, f, indent=2)
+    return programs
 
 @app.post("/api/users/{user_id}/programs")
 async def save_program(user_id: str, request: Request):
@@ -513,8 +629,8 @@ async def save_program(user_id: str, request: Request):
         with open(path) as f:
             programs = json.load(f)
 
-    # Upsert by id
-    prog_id = body.get("id", str(uuid.uuid4())[:8])
+    # Upsert by id — ensure non-empty ID
+    prog_id = body.get("id") or str(uuid.uuid4())[:8]
     body["id"] = prog_id
     programs = [p for p in programs if p.get("id") != prog_id]
     programs.append(body)
@@ -594,10 +710,10 @@ async def export_workout(user_id: str, workout_id: str):
 @app.get("/api/users/{user_id}/settings")
 async def get_user_settings(user_id: str):
     settings = strava_module.load_user_settings(user_id)
-    # Don't expose the secret
     safe = {
         "strava_client_id": settings.get("strava_client_id", ""),
         "strava_connected": strava_module.is_connected(user_id),
+        "weight_kg": settings.get("weight_kg", 75),
     }
     return safe
 
@@ -609,6 +725,8 @@ async def update_user_settings(user_id: str, request: Request):
         settings["strava_client_id"] = body["strava_client_id"]
     if "strava_client_secret" in body:
         settings["strava_client_secret"] = body["strava_client_secret"]
+    if "weight_kg" in body:
+        settings["weight_kg"] = float(body["weight_kg"])
     strava_module.save_user_settings(user_id, settings)
     return {"ok": True}
 

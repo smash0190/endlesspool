@@ -117,7 +117,7 @@
                     <button class="btn btn-primary" onclick="sendSpeed()">Set Pace</button>
                 </div>
 
-                <!-- Distance -->
+                <!-- Stats -->
                 <div class="control-group stats-row">
                     <div class="stat">
                         <span class="stat-label">Segment</span>
@@ -128,8 +128,12 @@
                         <span id="stat-total" class="stat-value">0.0 m</span>
                     </div>
                     <div class="stat">
-                        <span class="stat-label">Current Pace</span>
+                        <span class="stat-label">Pace</span>
                         <span id="stat-pace" class="stat-value">--:--</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Calories</span>
+                        <span id="stat-calories" class="stat-value">0</span>
                     </div>
                 </div>
 
@@ -184,6 +188,16 @@
                         <div id="runner-section" class="runner-section"></div>
                         <div id="runner-interval" class="runner-interval"></div>
                         <div id="runner-countdown" class="big-number">--:--</div>
+                        <div id="runner-calories" class="runner-calories">0 kcal</div>
+                    </div>
+                    <!-- Pace offset: big mobile-friendly buttons -->
+                    <div class="pace-offset-row">
+                        <button class="pace-offset-btn faster" onclick="adjustPaceOffset(-5)" title="Faster">&minus;</button>
+                        <div class="pace-offset-display">
+                            <span class="pace-offset-label">Pace offset</span>
+                            <span id="pace-offset-value" class="pace-offset-val">0 s</span>
+                        </div>
+                        <button class="pace-offset-btn slower" onclick="adjustPaceOffset(+5)" title="Slower">+</button>
                     </div>
                     <div class="btn-row">
                         <button class="btn btn-danger" onclick="stopProgram()">Stop Program</button>
@@ -219,6 +233,18 @@
         <!-- ===== SETTINGS TAB ===== -->
         <div id="tab-settings" class="tab-content">
             <h2>Settings</h2>
+            <div class="settings-group">
+                <h3>Profile</h3>
+                <div class="form-group">
+                    <label>Body Weight (kg)</label>
+                    <div style="display:flex;gap:0.5rem;align-items:center">
+                        <input id="weight-input" type="number" min="30" max="200" step="0.5" value="75"
+                               style="width:90px">
+                        <button class="btn btn-primary btn-sm" onclick="saveWeight()">Save</button>
+                    </div>
+                </div>
+                <p class="help-text">Used for calorie estimation in workout history.</p>
+            </div>
             <div class="settings-group">
                 <h3>Strava Integration</h3>
                 <p id="strava-status">Not connected</p>

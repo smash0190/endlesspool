@@ -11,6 +11,10 @@ let workouts = [];         // User's workouts
 let editingProgram = null; // Program being edited
 let runningProgram = null; // Program execution state
 let runnerTimer = null;    // setInterval for runner countdown
+let paceOffset = 0;        // Seconds added to each swim step's pace (+slower, -faster)
+let liveCalories = 0;      // Real-time calorie accumulator for current session
+let liveCalLastTs = null;   // Timestamp of last calorie tick
+let liveCalWasActive = false; // Was pool active on last status update
 
 // ---------------------------------------------------------------------------
 // Init
@@ -263,6 +267,13 @@ function updateControlUI(s, recording) {
     const pace = s.commanded_pace || s.current_pace;
     document.getElementById('stat-pace').textContent = pace ? fmtPace(pace) + '/100m' : '--:--';
 
+    // Real-time calorie accumulation
+    updateLiveCalories(state, s.speed_param || 0);
+    const calDisplay = Math.round(liveCalories);
+    document.getElementById('stat-calories').textContent = calDisplay;
+    const runnerCalEl = document.getElementById('runner-calories');
+    if (runnerCalEl) runnerCalEl.textContent = calDisplay + ' kcal';
+
     // Start/Stop button — use pool_state so transient states (changing speed,
     // starting, stopping) don't flip the button.  Only "idle" and "ready"
     // mean the pool is truly stopped and the user can START.
@@ -270,9 +281,19 @@ function updateControlUI(s, recording) {
     const btn = document.getElementById('start-stop-btn');
     btn.textContent = poolActive ? 'STOP' : 'START';
     btn.classList.toggle('running', poolActive);
+    btn.disabled = false;
 
     // Recording badge
     document.getElementById('recording-badge').classList.toggle('hidden', !recording);
+
+    // Restore "Set" buttons once broadcast confirms values
+    const timerBtn = document.querySelector('[onclick="sendTimer()"]');
+    if (timerBtn && timerBtn.disabled) { timerBtn.textContent = 'Set'; timerBtn.disabled = false; }
+    const paceBtn = document.querySelector('[onclick="sendSpeed()"]');
+    if (paceBtn && paceBtn.disabled) { paceBtn.textContent = 'Set Pace'; paceBtn.disabled = false; }
+
+    // Program runner: sync swim steps to pool's remaining_timer
+    updateRunnerFromBroadcast(s);
 
     // Debug / raw values
     updateDebugPanel(s);
@@ -295,16 +316,23 @@ function updateDebugPanel(s) {
 function toggleStartStop() {
     const state = (poolStatus && poolStatus.pool_state) || 'idle';
     const poolActive = !['idle', 'ready'].includes(state);
+    const btn = document.getElementById('start-stop-btn');
     if (poolActive) {
+        btn.textContent = 'Stopping\u2026'; btn.disabled = true;
         wsSend({type: 'command', cmd: 'stop'});
     } else {
+        btn.textContent = 'Starting\u2026'; btn.disabled = true;
         wsSend({type: 'command', cmd: 'start'});
     }
 }
 
 function sendTimer() {
     const val = parseInt(document.getElementById('timer-input').value) || 1800;
+    const btn = document.querySelector('[onclick="sendTimer()"]');
+    if (btn) { btn.textContent = 'Setting\u2026'; btn.disabled = true; }
     wsSend({type: 'command', cmd: 'timer', value: val});
+    // Re-enable after broadcast confirms (or timeout)
+    setTimeout(() => { if (btn) { btn.textContent = 'Set'; btn.disabled = false; } }, 6000);
 }
 
 function adjustTimer(delta) {
@@ -317,7 +345,10 @@ function adjustTimer(delta) {
 function sendSpeed() {
     const paceSec = parseInt(document.getElementById('speed-slider').value);
     const param = paceToParam(paceSec);
+    const btn = document.querySelector('[onclick="sendSpeed()"]');
+    if (btn) { btn.textContent = 'Setting\u2026'; btn.disabled = true; }
     wsSend({type: 'command', cmd: 'speed', value: param});
+    setTimeout(() => { if (btn) { btn.textContent = 'Set Pace'; btn.disabled = false; } }, 6000);
 }
 
 function updatePaceDisplay(val) {
@@ -395,9 +426,9 @@ function countSets(p) {
 }
 
 async function deleteProgram(id) {
-    if (!confirm('Delete this program?')) return;
+    if (!id || !confirm('Delete this program?')) return;
     await fetch(`/api/users/${currentUser.id}/programs/${id}`, {method: 'DELETE'});
-    loadPrograms();
+    await loadPrograms();
 }
 
 // --- Program Editor ---
@@ -446,6 +477,7 @@ function renderEditorSections() {
                         onchange="editingProgram.sections[${si}].sets[${i}].rest=+this.value"></div>
                     <div><label>Note</label><input type="text" value="${esc(s.description||'')}" style="font-size:0.75rem"
                         onchange="editingProgram.sections[${si}].sets[${i}].description=this.value"></div>
+                    ${sec.sets.length > 1 ? `<button class="set-remove-btn" onclick="removeSet(${si},${i})">&times;</button>` : ''}
                 </div>
             `).join('')}
             <button class="btn btn-text btn-sm" onclick="addSet(${si})">+ Add Set</button>
@@ -465,6 +497,13 @@ function removeSection(si) {
 
 function addSet(si) {
     editingProgram.sections[si].sets.push({repeats: 1, duration: 60, pace: 120, rest: 0, description: ''});
+    renderEditorSections();
+}
+
+function removeSet(si, setIdx) {
+    const sets = editingProgram.sections[si].sets;
+    if (sets.length <= 1) return;
+    sets.splice(setIdx, 1);
     renderEditorSections();
 }
 
@@ -509,6 +548,9 @@ function runProgram(id) {
 
     runningProgram = {prog, steps, currentStep: 0, timeLeft: 0, totalTime: steps.reduce((a, s) => a + s.duration, 0), elapsed: 0};
 
+    paceOffset = 0;
+    updatePaceOffsetDisplay();
+
     document.getElementById('runner-program-name').textContent = prog.name;
     document.getElementById('runner-overlay').classList.remove('hidden');
 
@@ -519,6 +561,9 @@ function advanceRunner() {
     if (!runningProgram) return;
     const rp = runningProgram;
 
+    // Clear any rest-step timer from the previous step
+    if (runnerTimer) { clearInterval(runnerTimer); runnerTimer = null; }
+
     if (rp.currentStep >= rp.steps.length) {
         stopProgram();
         return;
@@ -526,41 +571,79 @@ function advanceRunner() {
 
     const step = rp.steps[rp.currentStep];
     rp.timeLeft = step.duration;
-
-    document.getElementById('runner-section').textContent = step.section;
-    document.getElementById('runner-interval').textContent =
-        step.type === 'rest' ? 'Rest' : `${step.description} for ${fmtTimer(step.duration)}`;
+    rp.waitingForPool = false;
 
     if (step.type === 'swim') {
-        const param = paceToParam(step.pace);
-        wsSend({type: 'command', cmd: 'speed', value: param});
-        wsSend({type: 'command', cmd: 'timer', value: step.duration});
-        setTimeout(() => wsSend({type: 'command', cmd: 'start'}), 300);
-    } else {
-        wsSend({type: 'command', cmd: 'stop'});
-    }
+        const effectivePace = paceToParam(step.pace + paceOffset);
+        const desc = step.description || fmtPace(step.pace);
+        const offsetStr = paceOffset !== 0
+            ? ` (${paceOffset > 0 ? '+' : ''}${paceOffset}s \u2192 ${fmtPace(effectivePace)})`
+            : '';
 
-    if (runnerTimer) clearInterval(runnerTimer);
-    runnerTimer = setInterval(runnerTick, 1000);
+        document.getElementById('runner-section').textContent = step.section;
+        document.getElementById('runner-interval').textContent =
+            `${desc}${offsetStr} for ${fmtTimer(step.duration)}`;
+        document.getElementById('runner-countdown').textContent = fmtTimer(step.duration);
+
+        // Swim steps: the pool's remaining_timer drives the countdown.
+        // updateRunnerFromBroadcast() handles sync + step advancement.
+        rp.waitingForPool = true;
+
+        wsSend({
+            type: 'command', cmd: 'program_step',
+            pace: effectivePace,
+            duration: step.duration,
+        });
+    } else {
+        // Rest steps: pool is stopped, use client-side countdown.
+        document.getElementById('runner-section').textContent = step.section;
+        document.getElementById('runner-interval').textContent = 'Rest';
+        document.getElementById('runner-countdown').textContent = fmtTimer(step.duration);
+        wsSend({type: 'command', cmd: 'stop'});
+        runnerTimer = setInterval(runnerRestTick, 1000);
+    }
 }
 
-function runnerTick() {
+function adjustPaceOffset(delta) {
+    paceOffset += delta;
+    // Clamp so effective pace stays in the valid 74-243 range even at extremes
+    paceOffset = Math.max(-60, Math.min(120, paceOffset));
+    updatePaceOffsetDisplay();
+
+    // If currently on a swim step, re-send the speed with the new offset
+    if (runningProgram) {
+        const step = runningProgram.steps[runningProgram.currentStep];
+        if (step && step.type === 'swim') {
+            const effectivePace = paceToParam(step.pace + paceOffset);
+            wsSend({type: 'command', cmd: 'speed', value: effectivePace});
+
+            // Update the interval description
+            const desc = step.description || fmtPace(step.pace);
+            const offsetStr = paceOffset !== 0
+                ? ` (${paceOffset > 0 ? '+' : ''}${paceOffset}s \u2192 ${fmtPace(effectivePace)})`
+                : '';
+            document.getElementById('runner-interval').textContent =
+                `${desc}${offsetStr} for ${fmtTimer(step.duration)}`;
+        }
+    }
+}
+
+function updatePaceOffsetDisplay() {
+    const el = document.getElementById('pace-offset-value');
+    if (!el) return;
+    const sign = paceOffset > 0 ? '+' : '';
+    el.textContent = `${sign}${paceOffset} s`;
+    el.style.color = paceOffset < 0 ? 'var(--success)' : paceOffset > 0 ? 'var(--danger)' : 'var(--text)';
+}
+
+function runnerRestTick() {
     if (!runningProgram) return;
     const rp = runningProgram;
     rp.timeLeft--;
     rp.elapsed++;
 
     document.getElementById('runner-countdown').textContent = fmtTimer(Math.max(0, rp.timeLeft));
-
-    // Progress bar
-    const pct = Math.min(100, (rp.elapsed / rp.totalTime) * 100);
-    let bar = document.querySelector('.runner-bar-fill');
-    if (!bar) {
-        document.getElementById('runner-progress').innerHTML =
-            '<div class="runner-bar"><div class="runner-bar-fill" style="width:0%"></div></div>';
-        bar = document.querySelector('.runner-bar-fill');
-    }
-    bar.style.width = pct + '%';
+    updateRunnerProgress();
 
     if (rp.timeLeft <= 0) {
         rp.currentStep++;
@@ -568,11 +651,105 @@ function runnerTick() {
     }
 }
 
+function updateRunnerFromBroadcast(s) {
+    if (!runningProgram) return;
+    const rp = runningProgram;
+    const step = rp.steps[rp.currentStep];
+    if (!step || !rp.waitingForPool) return;
+
+    // Sync countdown to the pool's remaining_timer
+    const poolRemaining = s.remaining_timer || 0;
+    rp.timeLeft = poolRemaining;
+
+    // Elapsed = time of completed steps + time into current step
+    const completedTime = rp.steps.slice(0, rp.currentStep).reduce((a, st) => a + st.duration, 0);
+    rp.elapsed = completedTime + Math.max(0, step.duration - poolRemaining);
+
+    document.getElementById('runner-countdown').textContent = fmtTimer(Math.max(0, poolRemaining));
+    updateRunnerProgress();
+
+    // Pool timer expired → advance to next step
+    const poolState = s.pool_state || 'idle';
+    if (poolRemaining <= 0 && ['idle', 'stopping'].includes(poolState)) {
+        rp.currentStep++;
+        advanceRunner();
+    }
+}
+
+function updateRunnerProgress() {
+    if (!runningProgram) return;
+    const rp = runningProgram;
+    const pct = Math.min(100, Math.max(0, (rp.elapsed / rp.totalTime) * 100));
+    let bar = document.querySelector('.runner-bar-fill');
+    if (!bar) {
+        document.getElementById('runner-progress').innerHTML =
+            '<div class="runner-bar"><div class="runner-bar-fill" style="width:0%"></div></div>';
+        bar = document.querySelector('.runner-bar-fill');
+    }
+    bar.style.width = pct + '%';
+}
+
 function stopProgram() {
     if (runnerTimer) { clearInterval(runnerTimer); runnerTimer = null; }
     runningProgram = null;
+    paceOffset = 0;
     document.getElementById('runner-overlay').classList.add('hidden');
     wsSend({type: 'command', cmd: 'stop'});
+}
+
+// ---------------------------------------------------------------------------
+// Real-time calorie tracking
+// ---------------------------------------------------------------------------
+function updateLiveCalories(state, speedParam) {
+    const now = Date.now();
+    const active = !['idle', 'ready'].includes(state);
+
+    if (active && liveCalWasActive && liveCalLastTs) {
+        // Accumulate: kcal = MET * weight_kg * hours
+        const dtHours = (now - liveCalLastTs) / 3600000;
+        const met = metForPace(speedParam || 150);
+        liveCalories += met * (userWeightKg || 75) * dtHours;
+    }
+
+    if (!active && liveCalWasActive) {
+        // Pool just stopped — round the total but keep it (reset on next start)
+    }
+    if (active && !liveCalWasActive) {
+        // Pool just started — reset accumulator for a new session
+        liveCalories = 0;
+    }
+
+    liveCalLastTs = now;
+    liveCalWasActive = active;
+}
+
+// ---------------------------------------------------------------------------
+// Calorie estimation (client-side, for older workouts without server-side data)
+// ---------------------------------------------------------------------------
+const MET_TABLE = [[74,10],[100,8.5],[130,7],[160,5.8],[200,4.5],[243,3.5]];
+
+function metForPace(pace) {
+    if (pace <= MET_TABLE[0][0]) return MET_TABLE[0][1];
+    if (pace >= MET_TABLE[MET_TABLE.length-1][0]) return MET_TABLE[MET_TABLE.length-1][1];
+    for (let i = 0; i < MET_TABLE.length - 1; i++) {
+        const [p1,m1] = MET_TABLE[i], [p2,m2] = MET_TABLE[i+1];
+        if (pace >= p1 && pace <= p2) {
+            const t = (pace - p1) / (p2 - p1);
+            return m1 + t * (m2 - m1);
+        }
+    }
+    return 5;
+}
+
+function estimateWorkoutCalories(w) {
+    if (w.total_calories) return w.total_calories;
+    let total = 0;
+    const kg = userWeightKg || 75;
+    for (const iv of (w.intervals || [])) {
+        const met = metForPace(iv.speed_param || 150);
+        total += met * kg * (iv.duration / 3600);
+    }
+    return Math.round(total);
 }
 
 // ---------------------------------------------------------------------------
@@ -605,6 +782,7 @@ function renderWorkouts() {
                 <span>${w.total_distance?.toFixed(0) || 0} m</span>
                 <span>${fmtTimer(w.total_time || 0)}</span>
                 <span>${w.intervals?.length || 0} intervals</span>
+                <span>${estimateWorkoutCalories(w)} kcal</span>
             </div>
             <div class="btn-row">
                 <button class="btn btn-text btn-sm" onclick="deleteWorkout('${w.id}')">Delete</button>
@@ -644,6 +822,8 @@ async function uploadStrava(id) {
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
+let userWeightKg = 75;
+
 async function loadSettings() {
     if (!currentUser) return;
     try {
@@ -654,7 +834,21 @@ async function loadSettings() {
             settings.strava_connected ? 'Connected to Strava' : 'Not connected';
         document.getElementById('strava-status').style.color =
             settings.strava_connected ? 'var(--success)' : 'var(--text-dim)';
+        userWeightKg = settings.weight_kg || 75;
+        document.getElementById('weight-input').value = userWeightKg;
     } catch {}
+}
+
+async function saveWeight() {
+    const w = parseFloat(document.getElementById('weight-input').value) || 75;
+    userWeightKg = w;
+    await fetch(`/api/users/${currentUser.id}/settings`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({weight_kg: w}),
+    });
+    // Re-render workouts with updated calorie estimates
+    renderWorkouts();
 }
 
 async function saveStravaSettings() {
