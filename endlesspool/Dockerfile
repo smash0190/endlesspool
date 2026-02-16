@@ -1,7 +1,7 @@
 ARG BUILD_FROM
 FROM ${BUILD_FROM}
 
-RUN apk add --no-cache python3 py3-pip git
+RUN apk add --no-cache python3 py3-pip git jq
 
 WORKDIR /app
 
