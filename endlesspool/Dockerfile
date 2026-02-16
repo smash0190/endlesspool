@@ -1,6 +1,11 @@
 ARG BUILD_FROM
 FROM ${BUILD_FROM}
 
+# The HA base image uses s6-overlay as its entrypoint (/init).
+# We don't need s6-overlay for a simple Python server, so clear it
+# to avoid "s6-overlay-suexec: fatal: can only run as pid 1".
+ENTRYPOINT []
+
 RUN apk add --no-cache python3 py3-pip git jq
 
 WORKDIR /app
