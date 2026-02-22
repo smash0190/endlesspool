@@ -17,5 +17,212 @@
       }
     ],
     "total_calories": 1
+  },
+  {
+    "id": "a0cf6391-1812-4d14-b964-ab47b1b69873",
+    "user_id": "8a868b81",
+    "start_time": "2026-02-22T00:33:49.506049+00:00",
+    "total_distance": 0.0,
+    "total_time": 20,
+    "intervals": [
+      {
+        "start_time": "2026-02-22T00:33:49.506049+00:00",
+        "duration": 20,
+        "distance": 0,
+        "speed_param": 180,
+        "avg_pace": 0,
+        "calories": 3,
+        "type": "swim"
+      }
+    ],
+    "icon": "",
+    "program_name": "Endurance Builder",
+    "total_calories": 3
+  },
+  {
+    "id": "76146f3c-b8a5-4212-8354-2f7875fdf224",
+    "user_id": "8a868b81",
+    "start_time": "2026-02-22T00:58:58.843276+00:00",
+    "total_distance": 183.2,
+    "total_time": 355,
+    "intervals": [
+      {
+        "start_time": "2026-02-22T00:58:58.843276+00:00",
+        "duration": 22,
+        "distance": 12.2,
+        "speed_param": 180,
+        "avg_pace": 180.0,
+        "calories": 4,
+        "type": "swim"
+      },
+      {
+        "start_time": "2026-02-22T00:59:21.411928+00:00",
+        "duration": 20,
+        "distance": 16.2,
+        "speed_param": 130,
+        "avg_pace": 123.8,
+        "calories": 4,
+        "type": "swim"
+      },
+      {
+        "start_time": "2026-02-22T00:59:41.415795+00:00",
+        "duration": 57,
+        "distance": 23.4,
+        "speed_param": 243,
+        "avg_pace": 243.1,
+        "calories": 6,
+        "type": "swim"
+      },
+      {
+        "start_time": "2026-02-22T01:00:38.863023+00:00",
+        "duration": 22,
+        "distance": 17.7,
+        "speed_param": 130,
+        "avg_pace": 124.3,
+        "calories": 5,
+        "type": "swim"
+      },
+      {
+        "start_time": "2026-02-22T01:01:01.379265+00:00",
+        "duration": 57,
+        "distance": 23.5,
+        "speed_param": 243,
+        "avg_pace": 243.1,
+        "calories": 6,
+        "type": "swim"
+      },
+      {
+        "start_time": "2026-02-22T01:01:59.335647+00:00",
+        "duration": 21,
+        "distance": 16.2,
+        "speed_param": 130,
+        "avg_pace": 130.0,
+        "calories": 5,
+        "type": "swim"
+      },
+      {
+        "start_time": "2026-02-22T01:02:20.834590+00:00",
+        "duration": 61,
+        "distance": 25.1,
+        "speed_param": 243,
+        "avg_pace": 243.0,
+        "calories": 7,
+        "type": "swim"
+      },
+      {
+        "start_time": "2026-02-22T01:03:21.882233+00:00",
+        "duration": 20,
+        "distance": 15.8,
+        "speed_param": 130,
+        "avg_pace": 126.7,
+        "calories": 4,
+        "type": "swim"
+      },
+      {
+        "start_time": "2026-02-22T01:03:42.342920+00:00",
+        "duration": 56,
+        "distance": 23.1,
+        "speed_param": 243,
+        "avg_pace": 243.0,
+        "calories": 6,
+        "type": "swim"
+      },
+      {
+        "start_time": "2026-02-22T01:04:39.290486+00:00",
+        "duration": 19,
+        "distance": 10.0,
+        "speed_param": 180,
+        "avg_pace": 190.0,
+        "calories": 3,
+        "type": "swim"
+      }
+    ],
+    "icon": "",
+    "program_name": "Endurance Builder",
+    "total_calories": 50
+  },
+  {
+    "id": "70d8521d-52f7-494c-8e53-c83c593534b3",
+    "user_id": "8a868b81",
+    "start_time": "2026-02-22T01:24:30.549025+00:00",
+    "total_distance": 101.5,
+    "total_time": 158,
+    "intervals": [
+      {
+        "start_time": "2026-02-22T01:24:30.549025+00:00",
+        "duration": 24,
+        "distance": 13.3,
+        "speed_param": 180,
+        "avg_pace": 180.0,
+        "calories": 4,
+        "type": "swim"
+      },
+      {
+        "start_time": "2026-02-22T01:24:54.655143+00:00",
+        "duration": 48,
+        "distance": 36.9,
+        "speed_param": 130,
+        "avg_pace": 130.0,
+        "calories": 11,
+        "type": "swim"
+      },
+      {
+        "start_time": "2026-02-22T01:25:42.862337+00:00",
+        "duration": 9,
+        "distance": 3.3,
+        "speed_param": 243,
+        "avg_pace": 273.6,
+        "calories": 1,
+        "type": "swim"
+      },
+      {
+        "start_time": "2026-02-22T01:25:52.144094+00:00",
+        "duration": 18,
+        "distance": 14.6,
+        "speed_param": 130,
+        "avg_pace": 123.2,
+        "calories": 4,
+        "type": "swim"
+      },
+      {
+        "start_time": "2026-02-22T01:26:11.040164+00:00",
+        "duration": 12,
+        "distance": 4.9,
+        "speed_param": 243,
+        "avg_pace": 242.9,
+        "calories": 1,
+        "type": "swim"
+      },
+      {
+        "start_time": "2026-02-22T01:26:23.942355+00:00",
+        "duration": 19,
+        "distance": 14.6,
+        "speed_param": 130,
+        "avg_pace": 130.0,
+        "calories": 4,
+        "type": "swim"
+      },
+      {
+        "start_time": "2026-02-22T01:26:43.357137+00:00",
+        "duration": 8,
+        "distance": 3.3,
+        "speed_param": 243,
+        "avg_pace": 243.2,
+        "calories": 1,
+        "type": "swim"
+      },
+      {
+        "start_time": "2026-02-22T01:26:51.584010+00:00",
+        "duration": 20,
+        "distance": 10.6,
+        "speed_param": 180,
+        "avg_pace": 189.4,
+        "calories": 3,
+        "type": "swim"
+      }
+    ],
+    "icon": "\ud83d\udd25",
+    "program_name": "Endurance Builder",
+    "total_calories": 29
   }
 ]

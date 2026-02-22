@@ -9,7 +9,7 @@
         "sets": [
           {
             "repeats": 1,
-            "duration": 300,
+            "duration": 20,
             "pace": 180,
             "rest": 0,
             "description": "Easy pace"
@@ -21,9 +21,9 @@
         "sets": [
           {
             "repeats": 4,
-            "duration": 180,
+            "duration": 20,
             "pace": 130,
-            "rest": 60,
+            "rest": 10,
             "description": "Moderate effort"
           }
         ]
@@ -33,19 +33,20 @@
         "sets": [
           {
             "repeats": 1,
-            "duration": 300,
+            "duration": 20,
             "pace": 180,
             "rest": 0,
             "description": "Easy pace"
           }
         ]
       }
-    ]
+    ],
+    "icon": "\ud83d\udd25"
   },
   {
-    "id": "intervals",
-    "name": "Interval Training",
-    "description": "Alternating fast and moderate intervals",
+    "id": "tempo",
+    "name": "Tempo Swim",
+    "description": "Sustained threshold pace effort",
     "sections": [
       {
         "name": "Warm-up",
@@ -63,18 +64,11 @@
         "name": "Main Set",
         "sets": [
           {
-            "repeats": 8,
-            "duration": 60,
-            "pace": 90,
-            "rest": 30,
-            "description": "Fast"
-          },
-          {
-            "repeats": 4,
-            "duration": 120,
-            "pace": 130,
-            "rest": 45,
-            "description": "Moderate"
+            "repeats": 1,
+            "duration": 1200,
+            "pace": 110,
+            "rest": 0,
+            "description": "Steady threshold"
           }
         ]
       },
@@ -90,7 +84,8 @@
           }
         ]
       }
-    ]
+    ],
+    "icon": "\u23f1\ufe0f"
   },
   {
     "id": "pyramid",
@@ -175,12 +170,13 @@
           }
         ]
       }
-    ]
+    ],
+    "icon": "\ud83d\udcd0"
   },
   {
-    "id": "tempo",
-    "name": "Tempo Swim",
-    "description": "Sustained threshold pace effort",
+    "id": "intervals",
+    "name": "Interval Training",
+    "description": "Alternating fast and moderate intervals",
     "sections": [
       {
         "name": "Warm-up",
@@ -198,11 +194,18 @@
         "name": "Main Set",
         "sets": [
           {
-            "repeats": 1,
-            "duration": 1200,
-            "pace": 110,
-            "rest": 0,
-            "description": "Steady threshold"
+            "repeats": 8,
+            "duration": 60,
+            "pace": 90,
+            "rest": 30,
+            "description": "Fast"
+          },
+          {
+            "repeats": 4,
+            "duration": 120,
+            "pace": 130,
+            "rest": 45,
+            "description": "Moderate"
           }
         ]
       },
@@ -218,6 +221,7 @@
           }
         ]
       }
-    ]
+    ],
+    "icon": "\ud83d\udc2c"
   }
 ]
