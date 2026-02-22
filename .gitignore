@@ -5,3 +5,4 @@ data/users/*/strava.json
 data/users/*/settings.json
 .env
 *.pcap
+test-results/.last-run.json
