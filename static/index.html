@@ -99,7 +99,7 @@
                     <div class="timer-controls">
                         <button class="btn btn-sm" onclick="adjustTimer(-60)">-1m</button>
                         <button class="btn btn-sm" onclick="adjustTimer(-300)">-5m</button>
-                        <input id="timer-input" type="number" min="0" max="5400" value="1800" step="60">
+                        <input id="timer-input" type="number" inputmode="numeric" pattern="[0-9]*" min="0" max="5400" value="1800" step="60">
                         <button class="btn btn-sm" onclick="adjustTimer(300)">+5m</button>
                         <button class="btn btn-sm" onclick="adjustTimer(60)">+1m</button>
                         <button class="btn btn-primary btn-sm" onclick="sendTimer()">Set</button>
@@ -188,6 +188,7 @@
                         <div id="runner-section" class="runner-section"></div>
                         <div id="runner-interval" class="runner-interval"></div>
                         <div id="runner-countdown" class="big-number">--:--</div>
+                        <div id="runner-total-remaining" class="runner-total-time">Total: --:--</div>
                         <div id="runner-calories" class="runner-calories">0 kcal</div>
                     </div>
                     <!-- Pace offset: big mobile-friendly buttons -->
@@ -209,10 +210,31 @@
             <div id="editor-overlay" class="overlay hidden">
                 <div class="overlay-content editor-content">
                     <h2 id="editor-title">New Program</h2>
-                    <input id="prog-name" type="text" placeholder="Program name" autocomplete="off">
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <select id="prog-icon" style="width:52px;font-size:1.4rem;text-align:center;padding:4px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px">
+                            <option value="">—</option>
+                            <option value="🏊">🏊</option>
+                            <option value="⚡">⚡</option>
+                            <option value="🔥">🔥</option>
+                            <option value="💪">💪</option>
+                            <option value="🎯">🎯</option>
+                            <option value="📐">📐</option>
+                            <option value="🌊">🌊</option>
+                            <option value="🏆">🏆</option>
+                            <option value="⏱️">⏱️</option>
+                            <option value="🐬">🐬</option>
+                            <option value="❄️">❄️</option>
+                            <option value="☀️">☀️</option>
+                            <option value="🌟">🌟</option>
+                            <option value="💧">💧</option>
+                        </select>
+                        <input id="prog-name" type="text" placeholder="Program name" autocomplete="off" style="flex:1">
+                    </div>
                     <input id="prog-desc" type="text" placeholder="Description" autocomplete="off">
 
                     <div id="editor-sections"></div>
+
+                    <div id="editor-total" class="editor-total"></div>
 
                     <button class="btn btn-outline btn-sm" onclick="addEditorSection()">+ Add Section</button>
 
@@ -238,7 +260,7 @@
                 <div class="form-group">
                     <label>Body Weight (kg)</label>
                     <div style="display:flex;gap:0.5rem;align-items:center">
-                        <input id="weight-input" type="number" min="30" max="200" step="0.5" value="75"
+                        <input id="weight-input" type="number" inputmode="decimal" min="30" max="200" step="0.5" value="75"
                                style="width:90px">
                         <button class="btn btn-primary btn-sm" onclick="saveWeight()">Save</button>
                     </div>

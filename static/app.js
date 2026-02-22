@@ -10,7 +10,7 @@ let programs = [];         // User's programs
 let workouts = [];         // User's workouts
 let editingProgram = null; // Program being edited
 let runningProgram = null; // Program execution state
-let runnerTimer = null;    // setInterval for runner countdown
+let wakeLock = null;       // Screen Wake Lock sentinel
 let paceOffset = 0;        // Seconds added to each swim step's pace (+slower, -faster)
 let liveCalories = 0;      // Real-time calorie accumulator for current session
 let liveCalLastTs = null;   // Timestamp of last calorie tick
@@ -320,9 +320,11 @@ function toggleStartStop() {
     if (poolActive) {
         btn.textContent = 'Stopping\u2026'; btn.disabled = true;
         wsSend({type: 'command', cmd: 'stop'});
+        releaseWakeLock();
     } else {
         btn.textContent = 'Starting\u2026'; btn.disabled = true;
         wsSend({type: 'command', cmd: 'start'});
+        requestWakeLock();
     }
 }
 
@@ -390,9 +392,10 @@ function renderPrograms() {
     list.innerHTML = programs.map(p => {
         const totalTime = calcProgramTime(p);
         const sets = countSets(p);
+        const icon = p.icon ? p.icon + ' ' : '';
         return `
         <div class="program-card">
-            <h3>${esc(p.name)}</h3>
+            <h3>${icon}${esc(p.name)}</h3>
             <p>${esc(p.description || '')}</p>
             <div class="program-meta">
                 <span>${fmtTimer(totalTime)} total</span>
@@ -400,6 +403,7 @@ function renderPrograms() {
             </div>
             <div class="btn-row">
                 <button class="btn btn-text btn-sm" onclick="deleteProgram('${p.id}')">Delete</button>
+                <button class="btn btn-text btn-sm" onclick="duplicateProgram('${p.id}')">Duplicate</button>
                 <button class="btn btn-outline btn-sm" onclick="editProgram('${p.id}')">Edit</button>
                 <button class="btn btn-primary btn-sm" onclick="runProgram('${p.id}')">Run</button>
             </div>
@@ -409,9 +413,14 @@ function renderPrograms() {
 
 function calcProgramTime(p) {
     let total = 0;
-    for (const sec of (p.sections || [])) {
+    const sections = p.sections || [];
+    for (let si = 0; si < sections.length; si++) {
+        const sec = sections[si];
         for (const s of (sec.sets || [])) {
             total += (s.duration + s.rest) * s.repeats;
+        }
+        if ((sec.pause || 0) > 0 && si < sections.length - 1) {
+            total += sec.pause;
         }
     }
     return total;
@@ -431,18 +440,34 @@ async function deleteProgram(id) {
     await loadPrograms();
 }
 
+async function duplicateProgram(id) {
+    const prog = programs.find(p => p.id === id);
+    if (!prog) return;
+    const copy = JSON.parse(JSON.stringify(prog));
+    copy.id = '';
+    copy.name = (copy.name || 'Program') + ' (copy)';
+    await fetch(`/api/users/${currentUser.id}/programs`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(copy),
+    });
+    await loadPrograms();
+}
+
 // --- Program Editor ---
 function showProgramEditor(prog) {
-    editingProgram = prog || {id: '', name: '', description: '', sections: [
-        {name: 'Warm-up', sets: [{repeats: 1, duration: 300, pace: 180, rest: 0, description: 'Easy'}]},
-        {name: 'Main Set', sets: [{repeats: 4, duration: 120, pace: 120, rest: 30, description: ''}]},
-        {name: 'Cool-down', sets: [{repeats: 1, duration: 300, pace: 180, rest: 0, description: 'Easy'}]},
+    editingProgram = prog || {id: '', name: '', icon: '', description: '', sections: [
+        {name: 'Warm-up', pause: 20, sets: [{repeats: 1, duration: 300, pace: 180, rest: 0, description: 'Easy'}]},
+        {name: 'Main Set', pause: 20, sets: [{repeats: 4, duration: 120, pace: 120, rest: 30, description: ''}]},
+        {name: 'Cool-down', pause: 0, sets: [{repeats: 1, duration: 300, pace: 180, rest: 0, description: 'Easy'}]},
     ]};
 
     document.getElementById('editor-title').textContent = prog ? 'Edit Program' : 'New Program';
+    document.getElementById('prog-icon').value = editingProgram.icon || '';
     document.getElementById('prog-name').value = editingProgram.name;
     document.getElementById('prog-desc').value = editingProgram.description || '';
     renderEditorSections();
+    updateEditorTotal();
     document.getElementById('editor-overlay').classList.remove('hidden');
 }
 
@@ -467,37 +492,68 @@ function renderEditorSections() {
             </h4>
             ${sec.sets.map((s, i) => `
                 <div class="set-row">
-                    <div><label>Reps</label><input type="number" min="1" max="50" value="${s.repeats}"
-                        onchange="editingProgram.sections[${si}].sets[${i}].repeats=+this.value"></div>
-                    <div><label>Dur (s)</label><input type="number" min="10" max="3600" value="${s.duration}"
-                        onchange="editingProgram.sections[${si}].sets[${i}].duration=+this.value"></div>
-                    <div><label>Pace/100</label><input type="number" min="74" max="243" value="${s.pace}"
+                    <div><label>Reps</label><input type="number" inputmode="numeric" pattern="[0-9]*" min="1" max="50" value="${s.repeats}"
+                        onchange="editingProgram.sections[${si}].sets[${i}].repeats=+this.value;updateEditorTotal()"></div>
+                    <div><label>Dur (s)</label><input type="number" inputmode="numeric" pattern="[0-9]*" min="10" max="3600" value="${s.duration}"
+                        onchange="editingProgram.sections[${si}].sets[${i}].duration=+this.value;updateEditorTotal()"></div>
+                    <div><label>Pace/100</label><input type="number" inputmode="numeric" pattern="[0-9]*" min="74" max="243" value="${s.pace}"
                         onchange="editingProgram.sections[${si}].sets[${i}].pace=+this.value"></div>
-                    <div><label>Rest (s)</label><input type="number" min="0" max="300" value="${s.rest}"
-                        onchange="editingProgram.sections[${si}].sets[${i}].rest=+this.value"></div>
+                    <div><label>Rest (s)</label><input type="number" inputmode="numeric" pattern="[0-9]*" min="0" max="300" value="${s.rest}"
+                        onchange="editingProgram.sections[${si}].sets[${i}].rest=+this.value;updateEditorTotal()"></div>
                     <div><label>Note</label><input type="text" value="${esc(s.description||'')}" style="font-size:0.75rem"
                         onchange="editingProgram.sections[${si}].sets[${i}].description=this.value"></div>
                     ${sec.sets.length > 1 ? `<button class="set-remove-btn" onclick="removeSet(${si},${i})">&times;</button>` : ''}
                 </div>
             `).join('')}
-            <button class="btn btn-text btn-sm" onclick="addSet(${si})">+ Add Set</button>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+                <button class="btn btn-text btn-sm" onclick="addSet(${si})">+ Add Set</button>
+                <label style="margin-left:auto;font-size:0.75rem">Pause after section (s)</label>
+                <input type="number" inputmode="numeric" pattern="[0-9]*" min="0" max="300" value="${sec.pause || 0}" style="width:56px"
+                    onchange="editingProgram.sections[${si}].pause=+this.value;updateEditorTotal()">
+            </div>
         </div>
     `).join('');
 }
 
+function updateEditorTotal() {
+    if (!editingProgram) return;
+    const el = document.getElementById('editor-total');
+    if (!el) return;
+    let swimTime = 0, restTime = 0, pauseTime = 0;
+    const sections = editingProgram.sections || [];
+    for (let si = 0; si < sections.length; si++) {
+        const sec = sections[si];
+        for (const s of (sec.sets || [])) {
+            swimTime += s.duration * s.repeats;
+            restTime += s.rest * s.repeats;
+        }
+        if ((sec.pause || 0) > 0 && si < sections.length - 1) {
+            pauseTime += sec.pause;
+        }
+    }
+    const total = swimTime + restTime + pauseTime;
+    let parts = [`${fmtTimer(swimTime)} swim`];
+    if (restTime > 0) parts.push(`${fmtTimer(restTime)} rest`);
+    if (pauseTime > 0) parts.push(`${fmtTimer(pauseTime)} pause`);
+    el.textContent = `Total: ${fmtTimer(total)} (${parts.join(' + ')})`;
+}
+
 function addEditorSection() {
-    editingProgram.sections.push({name: 'Section', sets: [{repeats: 1, duration: 60, pace: 120, rest: 0, description: ''}]});
+    editingProgram.sections.push({name: 'Section', pause: 0, sets: [{repeats: 1, duration: 60, pace: 120, rest: 0, description: ''}]});
     renderEditorSections();
+    updateEditorTotal();
 }
 
 function removeSection(si) {
     editingProgram.sections.splice(si, 1);
     renderEditorSections();
+    updateEditorTotal();
 }
 
 function addSet(si) {
     editingProgram.sections[si].sets.push({repeats: 1, duration: 60, pace: 120, rest: 0, description: ''});
     renderEditorSections();
+    updateEditorTotal();
 }
 
 function removeSet(si, setIdx) {
@@ -505,9 +561,11 @@ function removeSet(si, setIdx) {
     if (sets.length <= 1) return;
     sets.splice(setIdx, 1);
     renderEditorSections();
+    updateEditorTotal();
 }
 
 async function saveProgram() {
+    editingProgram.icon = document.getElementById('prog-icon').value.trim();
     editingProgram.name = document.getElementById('prog-name').value.trim() || 'Untitled';
     editingProgram.description = document.getElementById('prog-desc').value.trim();
 
@@ -521,14 +579,34 @@ async function saveProgram() {
     loadPrograms();
 }
 
+// --- Wake Lock ---
+async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    try { wakeLock = await navigator.wakeLock.request('screen'); }
+    catch { /* user denied or not supported */ }
+}
+function releaseWakeLock() {
+    if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+}
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && (runningProgram || (poolStatus && !['idle','ready'].includes(poolStatus.pool_state)))) {
+        requestWakeLock();
+    }
+});
+
 // --- Program Runner ---
+const SLOWEST_PACE = 243;  // 4:03/100m — used for rest/pause steps
+
 function runProgram(id) {
     const prog = programs.find(p => p.id === id);
     if (!prog) return;
 
-    // Build flat list of steps: {type, duration, pace, description, section}
+    // Build flat list of steps.  Rest/pause steps run at slowest pace
+    // so the pool never stops mid-workout.
     const steps = [];
-    for (const sec of prog.sections) {
+    const sections = prog.sections || [];
+    for (let si = 0; si < sections.length; si++) {
+        const sec = sections[si];
         for (const s of sec.sets) {
             for (let r = 0; r < s.repeats; r++) {
                 steps.push({
@@ -538,31 +616,68 @@ function runProgram(id) {
                 });
                 if (s.rest > 0) {
                     steps.push({
-                        type: 'rest', duration: s.rest, pace: 0,
-                        description: 'Rest', section: sec.name,
+                        type: 'rest', duration: s.rest, pace: SLOWEST_PACE,
+                        description: 'Recovery', section: sec.name,
                     });
                 }
             }
         }
+        // Section pause (between sections, not after the last one)
+        const pause = sec.pause || 0;
+        if (pause > 0 && si < sections.length - 1) {
+            steps.push({
+                type: 'rest', duration: pause, pace: SLOWEST_PACE,
+                description: 'Pause', section: sec.name,
+            });
+        }
     }
 
-    runningProgram = {prog, steps, currentStep: 0, timeLeft: 0, totalTime: steps.reduce((a, s) => a + s.duration, 0), elapsed: 0};
+    const totalTime = steps.reduce((a, s) => a + s.duration, 0);
+    runningProgram = {prog, steps, currentStep: 0, timeLeft: 0, totalTime, elapsed: 0, workoutStarted: false};
 
     paceOffset = 0;
     updatePaceOffsetDisplay();
 
-    document.getElementById('runner-program-name').textContent = prog.name;
+    document.getElementById('runner-program-name').textContent =
+        (prog.icon ? prog.icon + ' ' : '') + prog.name;
     document.getElementById('runner-overlay').classList.remove('hidden');
 
+    wsSend({type: 'command', cmd: 'set_program_meta', icon: prog.icon || '', name: prog.name || ''});
+    requestWakeLock();
     advanceRunner();
+}
+
+function updateRunnerStepUI() {
+    const rp = runningProgram;
+    if (!rp) return;
+    const step = rp.steps[rp.currentStep];
+    if (!step) return;
+
+    const isRest = step.type === 'rest';
+    const effectivePace = isRest
+        ? SLOWEST_PACE
+        : paceToParam(step.pace + paceOffset);
+
+    let label;
+    if (isRest) {
+        label = step.description || 'Recovery';
+    } else {
+        const desc = step.description || fmtPace(step.pace);
+        const offsetStr = paceOffset !== 0
+            ? ` (${paceOffset > 0 ? '+' : ''}${paceOffset}s \u2192 ${fmtPace(effectivePace)})`
+            : '';
+        label = `${desc}${offsetStr}`;
+    }
+
+    document.getElementById('runner-section').textContent = step.section;
+    document.getElementById('runner-interval').textContent =
+        `${label} for ${fmtTimer(step.duration)}`;
+    document.getElementById('runner-countdown').textContent = fmtTimer(step.duration);
 }
 
 function advanceRunner() {
     if (!runningProgram) return;
     const rp = runningProgram;
-
-    // Clear any rest-step timer from the previous step
-    if (runnerTimer) { clearInterval(runnerTimer); runnerTimer = null; }
 
     if (rp.currentStep >= rp.steps.length) {
         stopProgram();
@@ -570,37 +685,30 @@ function advanceRunner() {
     }
 
     const step = rp.steps[rp.currentStep];
-    rp.timeLeft = step.duration;
-    rp.waitingForPool = false;
+    const isRest = step.type === 'rest';
+    const effectivePace = isRest
+        ? SLOWEST_PACE
+        : paceToParam(step.pace + paceOffset);
 
-    if (step.type === 'swim') {
-        const effectivePace = paceToParam(step.pace + paceOffset);
-        const desc = step.description || fmtPace(step.pace);
-        const offsetStr = paceOffset !== 0
-            ? ` (${paceOffset > 0 ? '+' : ''}${paceOffset}s \u2192 ${fmtPace(effectivePace)})`
-            : '';
+    updateRunnerStepUI();
 
-        document.getElementById('runner-section').textContent = step.section;
-        document.getElementById('runner-interval').textContent =
-            `${desc}${offsetStr} for ${fmtTimer(step.duration)}`;
-        document.getElementById('runner-countdown').textContent = fmtTimer(step.duration);
-
-        // Swim steps: the pool's remaining_timer drives the countdown.
-        // updateRunnerFromBroadcast() handles sync + step advancement.
+    if (!rp.workoutStarted) {
+        // First step: set the pool timer to the TOTAL workout time so the
+        // pool never stops mid-workout, then set speed and start.
+        rp.workoutStarted = true;
         rp.waitingForPool = true;
+        rp.poolAckedStep = false;
+        rp.stepSentAt = Date.now();
 
         wsSend({
             type: 'command', cmd: 'program_step',
             pace: effectivePace,
-            duration: step.duration,
+            duration: rp.totalTime,
         });
     } else {
-        // Rest steps: pool is stopped, use client-side countdown.
-        document.getElementById('runner-section').textContent = step.section;
-        document.getElementById('runner-interval').textContent = 'Rest';
-        document.getElementById('runner-countdown').textContent = fmtTimer(step.duration);
-        wsSend({type: 'command', cmd: 'stop'});
-        runnerTimer = setInterval(runnerRestTick, 1000);
+        // Subsequent steps: pool is already running with total-time timer.
+        // Only change the speed — no timer reset, no start/stop.
+        wsSend({type: 'command', cmd: 'speed', value: effectivePace});
     }
 }
 
@@ -610,20 +718,18 @@ function adjustPaceOffset(delta) {
     paceOffset = Math.max(-60, Math.min(120, paceOffset));
     updatePaceOffsetDisplay();
 
-    // If currently on a swim step, re-send the speed with the new offset
     if (runningProgram) {
         const step = runningProgram.steps[runningProgram.currentStep];
         if (step && step.type === 'swim') {
             const effectivePace = paceToParam(step.pace + paceOffset);
             wsSend({type: 'command', cmd: 'speed', value: effectivePace});
 
-            // Update the interval description
             const desc = step.description || fmtPace(step.pace);
             const offsetStr = paceOffset !== 0
                 ? ` (${paceOffset > 0 ? '+' : ''}${paceOffset}s \u2192 ${fmtPace(effectivePace)})`
                 : '';
             document.getElementById('runner-interval').textContent =
-                `${desc}${offsetStr} for ${fmtTimer(step.duration)}`;
+                `${desc}${offsetStr} for ${fmtTimer(runningProgram.timeLeft)}`;
         }
     }
 }
@@ -636,43 +742,69 @@ function updatePaceOffsetDisplay() {
     el.style.color = paceOffset < 0 ? 'var(--success)' : paceOffset > 0 ? 'var(--danger)' : 'var(--text)';
 }
 
-function runnerRestTick() {
-    if (!runningProgram) return;
-    const rp = runningProgram;
-    rp.timeLeft--;
-    rp.elapsed++;
-
-    document.getElementById('runner-countdown').textContent = fmtTimer(Math.max(0, rp.timeLeft));
-    updateRunnerProgress();
-
-    if (rp.timeLeft <= 0) {
-        rp.currentStep++;
-        advanceRunner();
-    }
-}
-
 function updateRunnerFromBroadcast(s) {
     if (!runningProgram) return;
     const rp = runningProgram;
-    const step = rp.steps[rp.currentStep];
-    if (!step || !rp.waitingForPool) return;
+    if (!rp.waitingForPool) return;
 
-    // Sync countdown to the pool's remaining_timer
     const poolRemaining = s.remaining_timer || 0;
-    rp.timeLeft = poolRemaining;
+    const poolState = s.pool_state || 'idle';
+    const poolActive = ['running', 'starting', 'changing'].includes(poolState);
 
-    // Elapsed = time of completed steps + time into current step
-    const completedTime = rp.steps.slice(0, rp.currentStep).reduce((a, st) => a + st.duration, 0);
-    rp.elapsed = completedTime + Math.max(0, step.duration - poolRemaining);
+    // Wait for the pool to actually be running before tracking elapsed time.
+    // Using poolActive (not just remaining_timer > 0) prevents a stale timer
+    // from a previous session from causing workoutElapsed to jump.
+    if (!rp.poolAckedStep) {
+        if (poolActive && poolRemaining > 0) {
+            rp.poolAckedStep = true;
+            rp.poolTimerStart = poolRemaining;
+        } else {
+            const waitSec = Math.round((Date.now() - (rp.stepSentAt || Date.now())) / 1000);
+            document.getElementById('runner-countdown').textContent =
+                `Starting\u2026 ${waitSec}s`;
+            return;
+        }
+    }
 
-    document.getElementById('runner-countdown').textContent = fmtTimer(Math.max(0, poolRemaining));
+    // Derive workout elapsed from the pool's countdown relative to when it
+    // first started.  poolTimerStart ≈ totalTime but may differ by a few
+    // seconds of setup time — using it avoids jumps from stale timer values.
+    const workoutElapsed = Math.max(0, rp.poolTimerStart - poolRemaining);
+    rp.elapsed = workoutElapsed;
+
+    // Determine which step we should be on based on elapsed time.
+    let cumulative = 0;
+    let targetStep = rp.steps.length;
+    for (let i = 0; i < rp.steps.length; i++) {
+        cumulative += rp.steps[i].duration;
+        if (workoutElapsed < cumulative) {
+            targetStep = i;
+            break;
+        }
+    }
+
+    // Advance to the correct step if needed (sends only a speed change).
+    if (targetStep > rp.currentStep && targetStep < rp.steps.length) {
+        rp.currentStep = targetStep;
+        advanceRunner();
+    }
+
+    // Per-step countdown
+    const step = rp.steps[rp.currentStep];
+    if (!step) return;
+    const stepStart = rp.steps.slice(0, rp.currentStep).reduce((a, st) => a + st.duration, 0);
+    const stepTimeLeft = Math.max(0, (stepStart + step.duration) - workoutElapsed);
+    rp.timeLeft = stepTimeLeft;
+
+    document.getElementById('runner-countdown').textContent = fmtTimer(Math.round(stepTimeLeft));
+    const totalLeft = Math.max(0, rp.totalTime - workoutElapsed);
+    document.getElementById('runner-total-remaining').textContent =
+        'Total: ' + fmtTimer(Math.round(totalLeft));
     updateRunnerProgress();
 
-    // Pool timer expired → advance to next step
-    const poolState = s.pool_state || 'idle';
-    if (poolRemaining <= 0 && ['idle', 'stopping'].includes(poolState)) {
-        rp.currentStep++;
-        advanceRunner();
+    // Workout complete: all steps elapsed OR pool timer expired
+    if (targetStep >= rp.steps.length || (poolRemaining <= 0 && !poolActive)) {
+        stopProgram();
     }
 }
 
@@ -690,11 +822,11 @@ function updateRunnerProgress() {
 }
 
 function stopProgram() {
-    if (runnerTimer) { clearInterval(runnerTimer); runnerTimer = null; }
     runningProgram = null;
     paceOffset = 0;
     document.getElementById('runner-overlay').classList.add('hidden');
     wsSend({type: 'command', cmd: 'stop'});
+    releaseWakeLock();
 }
 
 // ---------------------------------------------------------------------------
@@ -775,9 +907,10 @@ function renderWorkouts() {
         const date = new Date(w.start_time).toLocaleDateString(undefined, {
             weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
         });
+        const wIcon = w.icon ? w.icon + ' ' : '';
         return `
         <div class="workout-card">
-            <h3>${date}</h3>
+            <h3>${wIcon}${date}</h3>
             <div class="workout-meta">
                 <span>${w.total_distance?.toFixed(0) || 0} m</span>
                 <span>${fmtTimer(w.total_time || 0)}</span>

@@ -181,6 +181,11 @@ class WorkoutRecorder:
                 return self._finalize_locked()
             return None
 
+    def set_program_meta(self, icon: str = "", name: str = ""):
+        """Set program metadata to be attached to the next workout."""
+        self.pending_icon = icon
+        self.pending_program_name = name
+
     def _on_start(self, status: PoolStatus, now: float):
         if not self.active_user_id:
             return
@@ -194,6 +199,8 @@ class WorkoutRecorder:
                 "total_distance": 0.0,
                 "total_time": 0,
                 "intervals": [],
+                "icon": getattr(self, "pending_icon", ""),
+                "program_name": getattr(self, "pending_program_name", ""),
             }
             self.recording = True
         self._start_interval(status, now)
@@ -501,6 +508,12 @@ async def _ws_receive_commands(ws: WebSocket):
                     args=(pace, duration),
                     daemon=True,
                 ).start()
+            elif cmd == "set_program_meta":
+                if workout_recorder:
+                    workout_recorder.set_program_meta(
+                        icon=msg.get("icon", ""),
+                        name=msg.get("name", ""),
+                    )
         elif msg_type == "set_user":
             user_id = msg.get("user_id")
             if workout_recorder and user_id:
@@ -766,7 +779,9 @@ async def upload_to_strava(user_id: str, workout_id: str):
 
     dist = workout.get("total_distance", 0)
     dur = workout.get("total_time", 0)
-    name = f"Pool Swim - {dist:.0f}m in {format_timer(dur)}"
+    icon = workout.get("icon", "")
+    prefix = f"{icon} " if icon else ""
+    name = f"{prefix}Pool Swim - {dist:.0f}m in {format_timer(dur)}"
 
     try:
         result = await strava_module.upload_tcx(user_id, tcx_content, name)
@@ -793,14 +808,15 @@ def _default_programs() -> List[Dict]:
         {
             "id": "endurance",
             "name": "Endurance Builder",
+            "icon": "\U0001F3CA",
             "description": "Build aerobic base with steady swimming",
             "sections": [
                 {
-                    "name": "Warm-up",
+                    "name": "Warm-up", "pause": 20,
                     "sets": [{"repeats": 1, "duration": 300, "pace": 180, "rest": 0, "description": "Easy pace"}],
                 },
                 {
-                    "name": "Main Set",
+                    "name": "Main Set", "pause": 20,
                     "sets": [{"repeats": 4, "duration": 180, "pace": 130, "rest": 60, "description": "Moderate effort"}],
                 },
                 {
@@ -812,14 +828,15 @@ def _default_programs() -> List[Dict]:
         {
             "id": "intervals",
             "name": "Interval Training",
+            "icon": "\u26A1",
             "description": "Alternating fast and moderate intervals",
             "sections": [
                 {
-                    "name": "Warm-up",
+                    "name": "Warm-up", "pause": 20,
                     "sets": [{"repeats": 1, "duration": 300, "pace": 180, "rest": 0, "description": "Easy pace"}],
                 },
                 {
-                    "name": "Main Set",
+                    "name": "Main Set", "pause": 20,
                     "sets": [
                         {"repeats": 8, "duration": 60, "pace": 90, "rest": 30, "description": "Fast"},
                         {"repeats": 4, "duration": 120, "pace": 130, "rest": 45, "description": "Moderate"},
@@ -834,14 +851,15 @@ def _default_programs() -> List[Dict]:
         {
             "id": "pyramid",
             "name": "Pyramid Workout",
+            "icon": "\U0001F4D0",
             "description": "Ascending then descending interval durations",
             "sections": [
                 {
-                    "name": "Warm-up",
+                    "name": "Warm-up", "pause": 20,
                     "sets": [{"repeats": 1, "duration": 300, "pace": 180, "rest": 0, "description": "Easy pace"}],
                 },
                 {
-                    "name": "Main Set",
+                    "name": "Main Set", "pause": 20,
                     "sets": [
                         {"repeats": 1, "duration": 60, "pace": 120, "rest": 30, "description": "1 min"},
                         {"repeats": 1, "duration": 120, "pace": 110, "rest": 30, "description": "2 min"},
@@ -861,14 +879,15 @@ def _default_programs() -> List[Dict]:
         {
             "id": "tempo",
             "name": "Tempo Swim",
+            "icon": "\U0001F3AF",
             "description": "Sustained threshold pace effort",
             "sections": [
                 {
-                    "name": "Warm-up",
+                    "name": "Warm-up", "pause": 20,
                     "sets": [{"repeats": 1, "duration": 300, "pace": 180, "rest": 0, "description": "Easy pace"}],
                 },
                 {
-                    "name": "Main Set",
+                    "name": "Main Set", "pause": 20,
                     "sets": [{"repeats": 1, "duration": 1200, "pace": 110, "rest": 0, "description": "Steady threshold"}],
                 },
                 {
