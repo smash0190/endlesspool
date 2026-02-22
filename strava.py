@@ -13,6 +13,7 @@ import os
 import time
 from pathlib import Path
 from typing import Optional, Dict, Any
+from urllib.parse import urlencode
 
 import httpx
 
@@ -78,8 +79,7 @@ def get_auth_url(user_id: str, redirect_uri: str) -> Optional[str]:
         "state": user_id,
         "approval_prompt": "auto",
     }
-    query = "&".join(f"{k}={v}" for k, v in params.items())
-    return f"{STRAVA_AUTH_URL}?{query}"
+    return f"{STRAVA_AUTH_URL}?{urlencode(params)}"
 
 
 async def exchange_token(user_id: str, code: str) -> Dict[str, Any]:

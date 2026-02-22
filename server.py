@@ -780,8 +780,10 @@ async def upload_to_strava(user_id: str, workout_id: str):
     dist = workout.get("total_distance", 0)
     dur = workout.get("total_time", 0)
     icon = workout.get("icon", "")
+    prog_name = workout.get("program_name", "")
     prefix = f"{icon} " if icon else ""
-    name = f"{prefix}Pool Swim - {dist:.0f}m in {format_timer(dur)}"
+    label = prog_name if prog_name else "Pool Swim"
+    name = f"{prefix}{label} – {dist:.0f}m in {format_timer(dur)}"
 
     try:
         result = await strava_module.upload_tcx(user_id, tcx_content, name)

@@ -971,6 +971,8 @@ async function loadSettings() {
             settings.strava_connected ? 'var(--success)' : 'var(--text-dim)';
         userWeightKg = settings.weight_kg || 75;
         document.getElementById('weight-input').value = userWeightKg;
+        const cbDomain = document.getElementById('strava-callback-domain');
+        if (cbDomain) cbDomain.textContent = location.hostname;
     } catch {}
 }
 
