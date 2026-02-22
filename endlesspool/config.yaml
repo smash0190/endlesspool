@@ -1,5 +1,5 @@
 name: "Endless Pool Controller"
-version: "1.0.3"
+version: "1.0.4"
 slug: "endlesspool"
 description: "Web-based controller for FS FORTH-SYSTEME endless pools with training programs, workout tracking, and Strava upload"
 url: "https://github.com/smash0190/endlesspool"

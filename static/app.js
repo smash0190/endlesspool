@@ -392,10 +392,10 @@ function renderPrograms() {
     list.innerHTML = programs.map(p => {
         const totalTime = calcProgramTime(p);
         const sets = countSets(p);
-        const icon = p.icon ? p.icon + ' ' : '';
+        const iconHtml = p.icon ? `<span class="program-icon">${p.icon}</span>` : '';
         return `
         <div class="program-card">
-            <h3>${icon}${esc(p.name)}</h3>
+            <h3>${iconHtml}${esc(p.name)}</h3>
             <p>${esc(p.description || '')}</p>
             <div class="program-meta">
                 <span>${fmtTimer(totalTime)} total</span>
@@ -486,30 +486,32 @@ function renderEditorSections() {
     container.innerHTML = editingProgram.sections.map((sec, si) => `
         <div class="editor-section">
             <h4>
-                <input type="text" value="${esc(sec.name)}" style="width:120px;font-size:0.85rem"
+                <input type="text" value="${esc(sec.name)}"
                        onchange="editingProgram.sections[${si}].name=this.value">
                 <button class="btn btn-text btn-sm" onclick="removeSection(${si})">Remove</button>
             </h4>
             ${sec.sets.map((s, i) => `
                 <div class="set-row">
-                    <div><label>Reps</label><input type="number" inputmode="numeric" pattern="[0-9]*" min="1" max="50" value="${s.repeats}"
-                        onchange="editingProgram.sections[${si}].sets[${i}].repeats=+this.value;updateEditorTotal()"></div>
-                    <div><label>Dur (s)</label><input type="number" inputmode="numeric" pattern="[0-9]*" min="10" max="3600" value="${s.duration}"
-                        onchange="editingProgram.sections[${si}].sets[${i}].duration=+this.value;updateEditorTotal()"></div>
-                    <div><label>Pace/100</label><input type="number" inputmode="numeric" pattern="[0-9]*" min="74" max="243" value="${s.pace}"
-                        onchange="editingProgram.sections[${si}].sets[${i}].pace=+this.value"></div>
-                    <div><label>Rest (s)</label><input type="number" inputmode="numeric" pattern="[0-9]*" min="0" max="300" value="${s.rest}"
-                        onchange="editingProgram.sections[${si}].sets[${i}].rest=+this.value;updateEditorTotal()"></div>
-                    <div><label>Note</label><input type="text" value="${esc(s.description||'')}" style="font-size:0.75rem"
-                        onchange="editingProgram.sections[${si}].sets[${i}].description=this.value"></div>
-                    ${sec.sets.length > 1 ? `<button class="set-remove-btn" onclick="removeSet(${si},${i})">&times;</button>` : ''}
+                    <div><label>Reps</label><input type="text" inputmode="numeric" pattern="[0-9]*" value="${s.repeats}"
+                        onchange="editingProgram.sections[${si}].sets[${i}].repeats=Math.max(1,+this.value||1);updateEditorTotal()"></div>
+                    <div><label>Dur (s)</label><input type="text" inputmode="numeric" pattern="[0-9]*" value="${s.duration}"
+                        onchange="editingProgram.sections[${si}].sets[${i}].duration=Math.max(10,+this.value||60);updateEditorTotal()"></div>
+                    <div><label>Pace</label><input type="text" inputmode="numeric" pattern="[0-9]*" value="${s.pace}"
+                        onchange="editingProgram.sections[${si}].sets[${i}].pace=Math.min(243,Math.max(74,+this.value||120))"></div>
+                    <div><label>Rest (s)</label><input type="text" inputmode="numeric" pattern="[0-9]*" value="${s.rest}"
+                        onchange="editingProgram.sections[${si}].sets[${i}].rest=Math.max(0,+this.value||0);updateEditorTotal()"></div>
+                    <div class="set-note-row">
+                        <input type="text" placeholder="Note" value="${esc(s.description||'')}"
+                            onchange="editingProgram.sections[${si}].sets[${i}].description=this.value">
+                        ${sec.sets.length > 1 ? `<button class="set-remove-btn" onclick="removeSet(${si},${i})">&times;</button>` : ''}
+                    </div>
                 </div>
             `).join('')}
-            <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+            <div class="section-footer">
                 <button class="btn btn-text btn-sm" onclick="addSet(${si})">+ Add Set</button>
-                <label style="margin-left:auto;font-size:0.75rem">Pause after section (s)</label>
-                <input type="number" inputmode="numeric" pattern="[0-9]*" min="0" max="300" value="${sec.pause || 0}" style="width:56px"
-                    onchange="editingProgram.sections[${si}].pause=+this.value;updateEditorTotal()">
+                <label>Pause (s)</label>
+                <input type="text" inputmode="numeric" pattern="[0-9]*" value="${sec.pause || 0}"
+                    onchange="editingProgram.sections[${si}].pause=Math.max(0,+this.value||0);updateEditorTotal()">
             </div>
         </div>
     `).join('');
